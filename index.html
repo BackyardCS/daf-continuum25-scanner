@@ -1,27 +1,33 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Event Scanner</title>
-  <link rel="stylesheet" href="style.css">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- QR scanner library -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
   <div id="scanner-container">
-    <!-- Camera / QR View -->
-    <div id="reader"></div>
-    
-    <!-- Scan button -->
-    <button id="scanBtn">Scan</button>
+    <!-- Camera box -->
+    <div id="reader" aria-label="QR camera view"></div>
 
-    <!-- Guest + Confirm -->
-    <div class="row">
-      <div id="guestCount" class="circle">0</div>
-      <button id="confirmBtn">✔</button>
+    <!-- Controls under the camera -->
+    <div class="controls">
+      <button id="scanBtn" type="button">Scan</button>
+      <div id="guestCount" class="circle" aria-live="polite">0</div>
+      <button id="confirmBtn" type="button" title="Confirm check-in">✔</button>
     </div>
+
+    <!-- Status messages -->
+    <div id="status" class="status" aria-live="polite">Ready</div>
   </div>
 
+  <!-- App logic -->
   <script src="script.js"></script>
 </body>
 </html>

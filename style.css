@@ -1,48 +1,81 @@
+/* Layout */
 #scanner-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-  font-family: Arial, sans-serif;
+  gap: 12px;
+  padding: 16px;
+  font-family: system-ui, -apple-system, Arial, sans-serif;
+  background: #f6f7f9;
+  min-height: 100vh;
 }
 
+/* Camera frame: square and contained */
 #reader {
-  width: 300px;
-  height: 240px;
-  border: 2px solid #ccc;
+  width: 100%;
+  max-width: 400px;            /* match qrbox width */
+  aspect-ratio: 1 / 1;         /* keep square */
+  position: relative;
+  overflow: hidden;            /* hide overflow */
+  border: 2px solid #e5e7eb;
   border-radius: 12px;
+  background: #000;            /* black backdrop */
+}
+
+/* Force the video to sit neatly inside the frame */
+#reader video,
+#reader__scan_region video {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) rotate(0deg) !important; /* reset rotation */
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;  /* or 'cover' if you prefer a tighter crop */
+}
+
+/* Controls row under the camera */
+.controls {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 
 button {
   padding: 10px 16px;
-  border: none;
-  border-radius: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: #111827;
+  color: #fff;
   font-size: 16px;
   cursor: pointer;
 }
+button:disabled { opacity: 0.6; cursor: default; }
 
 .circle {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: #f3f3f3;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #111827;
   font-size: 24px;
-  font-weight: bold;
+  font-weight: 800;
+  border: 1px solid #e5e7eb;
 }
 
-.row {
-  display: flex;
-  gap: 24px;
-  align-items: center;
+/* Status line */
+.status {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 14px;
+  text-align: center;
 }
 
-#reader video {
-  transform: rotate(90deg);   /* rotate to landscape */
-  object-fit: contain;        /* keep proportions */
-  width: 100% !important;
-  height: auto !important;
-}
+/* Optional nicer colors for success / error messages */
+.ok { color: #16a34a !important; }
+.bad { color: #dc2626 !important; }

@@ -1,90 +1,150 @@
-// Start scanner preferring the back camera, with fallback to any rear camera by deviceId
+/* ========================
+   Configuration
+======================== */
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbxQqaGiPd5JoTKlyyzwYnIkFL7P1bMwX184UPaXHHO9sMbn2Y5_Oh2VkaP7t4HsieIeDg/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+
+/* ========================
+   State
+======================== */
+let qr = null;
+let isRunning = false;
+let lastCode = null;
+
+/* ========================
+   Helpers
+======================== */
+const $ = (sel) => document.querySelector(sel);
+const setStatus = (msg, cls = "") => {
+  const el = $("#status");
+  el.className = `status ${cls}`.trim();
+  el.textContent = msg;
+};
+const setGuests = (n) => { $("#guestCount").textContent = String(n ?? 0); };
+
+/* ========================
+   Scanner start/stop
+======================== */
 async function startScanner() {
-  const cfg = { fps: 10, qrbox: { width: 400, height: 400 } };
-  const elId = "reader";
-  const qr = new Html5Qrcode(elId);
+  if (isRunning) return;
+
+  const cfg = {
+    fps: 10,
+    qrbox: { width: 400, height: 400 }, // match CSS frame
+    aspectRatio: 1.0                     // keep square preview behavior
+  };
+
+  if (!qr) qr = new Html5Qrcode("reader");
 
   try {
-    // 1) Nudge iOS to show permission prompt in a user gesture (button click)
+    // Force permission prompt under user gesture (iOS quirk)
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
-    tmp.getTracks().forEach(t => t.stop()); // immediately release
+    tmp.getTracks().forEach(t => t.stop());
 
-    // 2) First try: ask explicitly for the rear camera
-    await qr.start({ facingMode: { exact: "environment" } }, cfg, onScan, () => {});
+    // Prefer back camera first
+    await qr.start({ facingMode: { exact: "environment" } }, cfg, onScan, onFail);
+    isRunning = true;
+    $("#scanBtn").textContent = "Stop";
+    setStatus("Scanning…");
     return;
-  } catch (e1) {
-    // continue to fallback
+  } catch (_) {
+    // fall back to device enumeration
   }
 
   try {
-    // 3) Fallback: enumerate devices and pick one that looks like a back camera
     const devices = await Html5Qrcode.getCameras();
     const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
     if (!rear) throw new Error("No cameras found");
-
-    await qr.start({ deviceId: { exact: rear.id } }, cfg, onScan, () => {});
-  } catch (e2) {
-    console.error(e2);
-    alert("Camera unavailable. Check HTTPS and Safari camera permissions for this site.");
-  }
-
-  function onScan(text) {
-    // your existing success handler
-    console.log("Scanned:", text);
+    await qr.start({ deviceId: { exact: rear.id } }, cfg, onScan, onFail);
+    isRunning = true;
+    $("#scanBtn").textContent = "Stop";
+    setStatus("Scanning…");
+  } catch (err) {
+    console.error(err);
+    setStatus("Camera unavailable. Check HTTPS and camera permissions for this site.", "bad");
   }
 }
 
-function onScanSuccess(text) {
-  // your existing logic...
-  console.log("Scanned:", text);
+async function stopScanner() {
+  if (!qr || !isRunning) return;
+  try {
+    await qr.stop();
+  } catch { /* ignore */ }
+  isRunning = false;
+  $("#scanBtn").textContent = "Scan";
+  setStatus("Stopped");
 }
-function onScanFailure() { /* ignore frame failures for speed */ }
 
-// call this from your Scan button
-document.getElementById("scanBtn").addEventListener("click", startScanner);
-
-let guestCount = 0;
-let lastCode = null;
-
-document.getElementById("scanBtn").addEventListener("click", async () => {
-  const scanner = new Html5Qrcode("reader");
-  const devices = await Html5Qrcode.getCameras();
-  const camId = devices[0].id;
-
-  scanner.start(
-    { deviceId: { exact: camId }},
-    { fps: 10, qrbox: 250 },
-    (decodedText) => {
-      lastCode = decodedText;
-      console.log("Scanned:", decodedText);
-
-      // Call your Google Apps Script endpoint to validate
-      fetch("YOUR_GOOGLE_SCRIPT_URL?code=" + encodeURIComponent(decodedText))
-        .then(res => res.json())
-        .then(data => {
-          if (data.allowed) {
-            guestCount = data.guests || 1;
-            document.getElementById("guestCount").innerText = guestCount;
-          } else {
-            alert("Invalid or already checked in");
-          }
-        });
+/* ========================
+   Scan handlers
+======================== */
+async function onScan(decodedText) {
+  // Example QR content: EVT-<response_id> or just <response_id>
+  lastCode = decodedText;
+  setStatus(`Scanned: ${decodedText}`);
+  // Validate against your Google Sheets API
+  try {
+    const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(decodedText)}`, {
+      credentials: "omit",
+      cache: "no-store",
+    });
+    const data = await res.json(); // expected: { allowed: bool, name?: string, guests?: number, reason?: string }
+    if (data.allowed) {
+      setGuests(data.guests || 1);
+      setStatus(`✅ Allowed${data.name ? " — " + data.name : ""}`, "ok");
+    } else {
+      setGuests(0);
+      setStatus(`⛔ Denied — ${data.reason || "Not found / already checked-in"}`, "bad");
     }
-  );
-});
+  } catch (e) {
+    console.error(e);
+    setStatus("Validation failed — check your Apps Script URL.", "bad");
+  }
 
-document.getElementById("confirmBtn").addEventListener("click", () => {
+  // Briefly pause to avoid double-reads
+  try { await qr.pause(true); } catch {}
+  setTimeout(() => { try { qr.resume(); } catch {} }, 900);
+}
+
+function onFail() {
+  // Ignore frame decode failures to keep it responsive
+}
+
+/* ========================
+   Confirm check-in
+======================== */
+async function confirmCheckIn() {
   if (!lastCode) {
-    alert("Scan a QR first!");
+    setStatus("Scan a QR first.", "bad");
     return;
   }
-
-  fetch("YOUR_GOOGLE_SCRIPT_URL?checkin=true&code=" + encodeURIComponent(lastCode))
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        alert("Guest confirmed!");
-        document.getElementById("guestCount").innerText = "0";
-      }
+  try {
+    const res = await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`, {
+      credentials: "omit",
+      cache: "no-store",
     });
+    const data = await res.json(); // expected: { success: bool, name?: string }
+    if (data.success) {
+      setStatus(`Checked-in${data.name ? " — " + data.name : ""} ✅`, "ok");
+      setGuests(0);
+    } else {
+      setStatus("Check-in failed. Try again.", "bad");
+    }
+  } catch (e) {
+    console.error(e);
+    setStatus("Check-in request error.", "bad");
+  }
+}
+
+/* ========================
+   Wire up UI
+======================== */
+$("#scanBtn").addEventListener("click", () => {
+  if (isRunning) stopScanner(); else startScanner();
+});
+
+$("#confirmBtn").addEventListener("click", confirmCheckIn);
+
+// Optional: stop camera when the page hides; resume on show
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { stopScanner(); }
 });
