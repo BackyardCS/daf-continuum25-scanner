@@ -1,7 +1,7 @@
 /* ========================
    Configuration
 ======================== */
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbxQqaGiPd5JoTKlyyzwYnIkFL7P1bMwX184UPaXHHO9sMbn2Y5_Oh2VkaP7t4HsieIeDg/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbzAjsn0RB2V5QgSA4-VF7t09agOtmKgtQecLxudDy6cMEdlxdY7RSuOykEU03a8JLqJYA/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
 
 /* ========================
    State
@@ -119,15 +119,14 @@ async function confirmCheckIn() {
   }
   try {
     const res = await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`, {
-      credentials: "omit",
-      cache: "no-store",
+      credentials: "omit", cache: "no-store",
     });
-    const data = await res.json(); // expected: { success: bool, name?: string }
+    const data = await res.json(); // { success?: bool, reason?: string, name?: string }
     if (data.success) {
       setStatus(`Checked-in${data.name ? " — " + data.name : ""} ✅`, "ok");
       setGuests(0);
     } else {
-      setStatus("Check-in failed. Try again.", "bad");
+      setStatus(`Check-in failed: ${data.reason || "Unknown error"}`, "bad");
     }
   } catch (e) {
     console.error(e);
