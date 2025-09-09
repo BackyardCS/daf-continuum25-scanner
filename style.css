@@ -79,3 +79,12 @@ button:disabled { opacity: 0.6; cursor: default; }
 /* Optional nicer colors for success / error messages */
 .ok { color: #16a34a !important; }
 .bad { color: #dc2626 !important; }
+
+#confirmBtn {
+  background: #16a34a;   /* green */
+  color: white;
+}
+
+#confirmBtn:hover {
+  background: #15803d;   /* darker green on hover */
+}
