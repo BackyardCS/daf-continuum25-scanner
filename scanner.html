@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Event QR Check-In</title>
+  <style>
+    body{font-family:system-ui,Arial;margin:0;background:#f6f7f9}
+    header{padding:12px 16px;background:#111827;color:#fff}
+    main{max-width:720px;margin:16px auto;padding:0 16px}
+    #reader{width:100%;max-width:520px;margin:16px auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .ok{color:#16a34a}.bad{color:#dc2626}.muted{color:#6b7280}
+    .log{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;max-height:220px;overflow:auto}
+    button{padding:10px 14px;border:0;border-radius:8px;background:#111827;color:#fff;cursor:pointer}
+  </style>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+  <header>Event Check-In</header>
+  <main>
+    <div class="row">
+      <button id="startBtn">Start camera</button>
+      <span class="muted">Point at the attendee’s QR.</span>
+    </div>
+    <div id="reader"></div>
+
+    <div class="log" id="status">Status: waiting…</div>
+    <div class="log" id="history"></div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const historyEl = document.getElementById('history');
+    let scanner;
+
+    function log(msg, cls=''){ historyEl.innerHTML = `<div class="${cls}">${msg}</div>` + historyEl.innerHTML; }
+
+    async function start() {
+      // create scanner
+      scanner = new Html5Qrcode("reader");
+      // start with back camera if possible
+      const devices = await Html5Qrcode.getCameras();
+      const camId = (devices.find(d => /back|rear/i.test(d.label)) || devices[0] || {}).id;
+      await scanner.start(
+        { deviceId: { exact: camId }},
+        { fps: 10, qrbox: 240 },
+        onScan,
+        (err) => { /* ignore scan errors to keep it snappy */ }
+      );
+      statusEl.textContent = "Status: scanning…";
+    }
+
+    async function onScan(text) {
+      // text should be like: EVT-<Typeform Response ID>
+      log(`Scanned: ${text}`, 'muted');
+
+      // OPTIONAL: validate against your allowlist API (Google Apps Script)
+      // const res = await fetch("YOUR_VALIDATION_ENDPOINT?code=" + encodeURIComponent(text));
+      // const {allowed, name} = await res.json();
+
+      const allowed = true; // set to API result in real use
+      if (allowed) {
+        statusEl.innerHTML = `✅ Allowed — ${text}`;
+        statusEl.className = 'ok';
+      } else {
+        statusEl.innerHTML = `⛔ Not found / already checked-in — ${text}`;
+        statusEl.className = 'bad';
+      }
+
+      // brief pause to avoid double-reads
+      await scanner.pause(true);
+      setTimeout(() => scanner.resume(), 1200);
+    }
+
+    document.getElementById('startBtn').addEventListener('click', start);
+  </script>
+</body>
+</html>
