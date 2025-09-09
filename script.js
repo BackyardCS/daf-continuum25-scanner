@@ -1,39 +1,36 @@
 // Start scanner preferring the back camera, with fallback to any rear camera by deviceId
 async function startScanner() {
-  const config = { fps: 10, qrbox: { width: 400, height: 400 } };
-
-  const html5QrCode = new Html5Qrcode("reader");
+  const cfg = { fps: 10, qrbox: { width: 400, height: 400 } };
+  const elId = "reader";
+  const qr = new Html5Qrcode(elId);
 
   try {
-    // 1) Ask for a rear camera by constraint (simplest)
-    await html5QrCode.start(
-      { facingMode: { exact: "environment" } },  // back camera
-      config,
-      onScanSuccess,
-      onScanFailure
-    );
-    return; // success
-  } catch (e) {
-    // If the exact facingMode fails (or device ignores it), fall back to device enumeration
+    // 1) Nudge iOS to show permission prompt in a user gesture (button click)
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(t => t.stop()); // immediately release
+
+    // 2) First try: ask explicitly for the rear camera
+    await qr.start({ facingMode: { exact: "environment" } }, cfg, onScan, () => {});
+    return;
+  } catch (e1) {
+    // continue to fallback
   }
 
   try {
-    // 2) Enumerate cameras, pick one whose label looks like a back camera
-    // NOTE: On iOS, labels are empty until permission has been granted at least once.
+    // 3) Fallback: enumerate devices and pick one that looks like a back camera
     const devices = await Html5Qrcode.getCameras();
-    // pick a rear/back camera if available
     const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
     if (!rear) throw new Error("No cameras found");
 
-    await html5QrCode.start(
-      { deviceId: { exact: rear.id } },
-      config,
-      onScanSuccess,
-      onScanFailure
-    );
-  } catch (err) {
-    console.error("Could not start back camera:", err);
-    alert("Camera start failed. Check permissions and HTTPS.");
+    await qr.start({ deviceId: { exact: rear.id } }, cfg, onScan, () => {});
+  } catch (e2) {
+    console.error(e2);
+    alert("Camera unavailable. Check HTTPS and Safari camera permissions for this site.");
+  }
+
+  function onScan(text) {
+    // your existing success handler
+    console.log("Scanned:", text);
   }
 }
 
