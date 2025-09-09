@@ -1,3 +1,14 @@
+scanner.start(
+  { deviceId: { exact: camId }},
+  {
+    fps: 10,
+    qrbox: { width: 400, height: 400 }   // ✅ match your QR size
+  },
+  (decodedText) => {
+    // on success
+  }
+);
+
 let guestCount = 0;
 let lastCode = null;
 

@@ -39,3 +39,10 @@ button {
   gap: 24px;
   align-items: center;
 }
+
+#reader video {
+  transform: rotate(90deg);   /* rotate to landscape */
+  object-fit: contain;        /* keep proportions */
+  width: 100% !important;
+  height: auto !important;
+}
