@@ -1,11 +1,9 @@
 /* ========================
    Configuration
 ======================== */
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbzXfi5rsmFvOn-BVcSd6FpY3xLPUf8rQ__om2Occba5WFzxq2pknsM38OtTi96sg_tD5Q/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbzXfi5rsmFvOn-BVcSd6FpY3xLPUf8rQ__om2Occba5WFzxq2pknsM38OtTi96sg_tD5Q/exec";
 
-// IMPORTANT: Set this to match your Sheet's meaning of "guests":
-// true  => Sheet's "guests" = companions only (NOT including the main guest)
-// false => Sheet's "guests" = total people (main guest included)
+// guests field config
 const GUESTS_FIELD_IS_ADDITIONAL = true;
 
 /* ========================
@@ -15,73 +13,50 @@ let qr = null;
 let isRunning = false;
 let lastCode = null;
 let lastAllowed = false;
-
-// Web Audio (beep)
 let audioCtx = null;
 
 /* ========================
    Helpers
 ======================== */
 const $ = (sel) => document.querySelector(sel);
-
 const setStatus = (msg, cls = "") => {
   const el = $("#status");
   el.className = `status ${cls}`.trim();
   el.textContent = msg;
-  // persists
 };
-
-const setBadgeTotal = (n) => { $("#guestCount").textContent = String(n ?? 0); };
-const setAttendee = (name) => { $("#attendee").textContent = name && String(name).trim() ? String(name).trim() : "—"; };
+const setAttendee = (name) => { $("#attendee").textContent = name?.trim() || "—"; };
 const setCompanions = (n) => { $("#companions").textContent = Number.isFinite(n) ? String(n) : "0"; };
 const enableConfirm = (on) => { $("#confirmBtn").disabled = !on; };
 
-function beep(duration = 120, freq = 880, type = "sine") {
+function beep(d=120, f=880, t="sine") {
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = 0.07;
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start();
-    setTimeout(() => { osc.stop(); }, duration);
-  } catch (_) {}
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = t; o.frequency.value = f;
+    g.gain.value = 0.07;
+    o.connect(g).connect(audioCtx.destination);
+    o.start(); setTimeout(()=>o.stop(), d);
+  } catch {}
 }
+function buzz(ms=50) { if(navigator.vibrate) try{navigator.vibrate(ms);}catch{} }
 
-function buzz(ms = 50) {
-  if (navigator.vibrate) try { navigator.vibrate(ms); } catch(_) {}
-}
-
-// Extract name from flexible API fields
 function extractName(data) {
-  const keys = ['name','full_name','fullname','Name','Full Name'];
-  for (const k of keys) {
-    const v = data?.[k];
-    if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
+  for (const k of ['name','full_name','fullname']) {
+    if (data?.[k]) return String(data[k]).trim();
   }
   return "";
 }
-
-// Extract raw guests value from flexible API fields
 function extractGuestsRaw(data) {
-  const keys = ['guests','guest_count','companions','num_guests','attendees','total_guests','Total Guests'];
-  for (const k of keys) {
-    const v = data?.[k];
-    if (v !== undefined && v !== null && String(v).trim() !== "") {
-      const n = Number(v);
-      if (!isNaN(n)) return n;
-    }
+  for (const k of ['guests','guest_count','companions','total_guests']) {
+    if (data?.[k]) { const n = Number(data[k]); if(!isNaN(n)) return n; }
   }
   return 0;
 }
-
-// Convert raw guests to companions + total entering
 function normalizeGuests(raw) {
-  const companions = GUESTS_FIELD_IS_ADDITIONAL ? raw : Math.max(Number(raw) - 1, 0);
-  const total = GUESTS_FIELD_IS_ADDITIONAL ? Number(raw) + 1 : Number(raw);
-  return { companions, total };
+  return GUESTS_FIELD_IS_ADDITIONAL
+    ? { companions: raw, total: raw+1 }
+    : { companions: Math.max(raw-1,0), total: raw };
 }
 
 /* ========================
@@ -89,164 +64,76 @@ function normalizeGuests(raw) {
 ======================== */
 async function startScanner() {
   if (isRunning) return;
-
   enableConfirm(false);
   setStatus("Starting camera…");
-
-  const cfg = {
-    fps: 10,
-    qrbox: { width: 420, height: 420 }, // match CSS frame
-    aspectRatio: 1.0
-  };
-
+  const cfg = { fps:10, qrbox:{width:420,height:420}, aspectRatio:1.0 };
   if (!qr) qr = new Html5Qrcode("reader");
-
   try {
-    // Permission nudge (esp. iOS Safari)
-    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
-    tmp.getTracks().forEach(t => t.stop());
-
-    // Prefer rear camera
-    await qr.start({ facingMode: { exact: "environment" } }, cfg, onScan, onFail);
-    isRunning = true;
-    $("#scanBtn").textContent = "Stop";
-    setStatus("Scanning…");
-    return;
-  } catch (_) {
-    // fallback
-  }
-
-  try {
+    await qr.start({ facingMode:{ exact:"environment"} }, cfg, onScan, onFail);
+    isRunning = true; $("#scanBtn").textContent="Stop"; setStatus("Scanning…");
+  } catch {
     const devices = await Html5Qrcode.getCameras();
-    const rear = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
-    if (!rear) throw new Error("No cameras found");
-    await qr.start({ deviceId: { exact: rear.id } }, cfg, onScan, onFail);
-    isRunning = true;
-    $("#scanBtn").textContent = "Stop";
-    setStatus("Scanning…");
-  } catch (err) {
-    console.error(err);
-    setStatus("Camera unavailable. Check HTTPS and camera permissions for this site.", "bad");
+    const rear = devices.find(d=>/back|rear|environment/i.test(d.label))||devices[0];
+    await qr.start({deviceId:{exact:rear.id}}, cfg, onScan, onFail);
+    isRunning=true; $("#scanBtn").textContent="Stop"; setStatus("Scanning…");
   }
 }
-
 async function stopScanner() {
-  if (!qr || !isRunning) {
-    $("#scanBtn").textContent = "Scan";
-    return;
-  }
-  try { await qr.stop(); } catch {}
-  isRunning = false;
-  $("#scanBtn").textContent = "Scan";
+  if (!qr||!isRunning){ $("#scanBtn").textContent="Scan"; return; }
+  try{await qr.stop();}catch{}
+  isRunning=false; $("#scanBtn").textContent="Scan";
 }
 
 /* ========================
    Scan handlers
 ======================== */
 async function onScan(decodedText) {
-  // Capture & stop the camera immediately
-  lastCode = (decodedText || "").trim();
+  lastCode = decodedText.trim();
   await stopScanner();
-
-  // Feedback: beep + vibration
-  beep(120, 880, "sine");
-  buzz(50);
-
+  beep(); buzz();
   setStatus(`Scanned: ${lastCode}`);
-
-  // Validate against your API
   try {
-    const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(lastCode)}`, {
-      credentials: "omit", cache: "no-store",
-    });
+    const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(lastCode)}`,{cache:"no-store"});
     const data = await res.json();
-
-    // Always show name + guests regardless of status
     const name = extractName(data);
-    const rawGuests = extractGuestsRaw(data);
-    const { companions, total } = normalizeGuests(rawGuests);
-
-    setAttendee(name);
-    setCompanions(companions);
-    setBadgeTotal(total);
-
-    lastAllowed = !!data.allowed;
-    if (lastAllowed) {
-      setStatus(`✅ Allowed${name ? " — " + name : ""}`, "ok");
-      enableConfirm(true);
-    } else {
-      setStatus(`⛔ Denied — ${data.reason || "Not found / already checked-in"}`, "bad");
-      enableConfirm(false);
-    }
-  } catch (e) {
-    console.error(e);
-    setStatus("Validation failed — check your Apps Script URL.", "bad");
+    const { companions } = normalizeGuests(extractGuestsRaw(data));
+    setAttendee(name); setCompanions(companions);
+    lastAllowed=!!data.allowed;
+    if(lastAllowed){ setStatus(`✅ Allowed${name?" — "+name:""}`,"ok"); enableConfirm(true); }
+    else{ setStatus(`⛔ Denied — ${data.reason||"Not found"}`,"bad"); enableConfirm(false); }
+  } catch {
+    setStatus("Validation failed — check your Apps Script URL.","bad");
     enableConfirm(false);
   }
 }
-
-function onFail() {
-  // ignore frame decode failures
-}
+function onFail(){}
 
 /* ========================
    Confirm check-in
 ======================== */
-let confirming = false;
-
-async function confirmCheckIn() {
-  if (confirming) return;
-  if (!lastCode) { setStatus("Scan a QR first.", "bad"); return; }
-  if (!lastAllowed) { setStatus("This code is not allowed.", "bad"); return; }
-
-  confirming = true;
-  enableConfirm(false);
-
-  try {
-    const res = await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`, {
-      credentials: "omit", cache: "no-store",
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      // Feedback
-      beep(120, 660, "square");
-      buzz(70);
-
-      // Optionally refresh name/guests if API echoes them
-      const name = extractName(data) || $("#attendee").textContent;
-      const rawGuests = extractGuestsRaw(data);
-      if (!isNaN(rawGuests) && rawGuests !== 0) {
-        const { companions, total } = normalizeGuests(rawGuests);
-        setCompanions(companions);
-        setBadgeTotal(total);
-      }
-
-      setStatus(`Checked-in${name ? " — " + name : ""} ✅`, "ok");
-      lastCode = null;
-      lastAllowed = false;
-    } else {
-      setStatus(`Check-in failed: ${data.reason || "Unknown error"}`, "bad");
-    }
-  } catch (e) {
-    console.error(e);
-    setStatus("Check-in request error.", "bad");
-  } finally {
-    confirming = false;
-  }
+let confirming=false;
+async function confirmCheckIn(){
+  if(confirming)return;
+  if(!lastCode){setStatus("Scan a QR first.","bad");return;}
+  if(!lastAllowed){setStatus("This code is not allowed.","bad");return;}
+  confirming=true; enableConfirm(false);
+  try{
+    const res=await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`);
+    const data=await res.json();
+    if(data.success){ beep(120,660,"square"); buzz(70);
+      setStatus(`Checked-in${extractName(data)?" — "+extractName(data):""} ✅`,"ok");
+      lastCode=null; lastAllowed=false;
+    } else { setStatus(`Check-in failed: ${data.reason||"Unknown"}`,"bad"); }
+  }catch{ setStatus("Check-in request error.","bad"); }
+  finally{ confirming=false; }
 }
 
 /* ========================
    Wire up UI
 ======================== */
-$("#scanBtn").addEventListener("click", async () => {
-  if (isRunning) { await stopScanner(); setStatus("Stopped"); }
-  else { await startScanner(); }
+$("#scanBtn").addEventListener("click",async()=>{
+  if(isRunning){ await stopScanner(); setStatus("Stopped"); }
+  else{ await startScanner(); }
 });
-
-$("#confirmBtn").addEventListener("click", confirmCheckIn);
-
-// Stop camera when the page hides (safety)
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) { stopScanner(); }
-});
+$("#confirmBtn").addEventListener("click",confirmCheckIn);
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){stopScanner();}});

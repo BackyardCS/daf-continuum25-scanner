@@ -13,9 +13,6 @@
 </head>
 <body>
   <header class="topbar">
-    <!-- Responsive, crisp logo:
-         - If you have SVG, it will be used.
-         - Otherwise, PNG srcset provides retina variants (2x/3x). -->
     <picture>
       <source srcset="images/logo.svg" type="image/svg+xml" />
       <img
@@ -31,10 +28,9 @@
     <!-- Camera box -->
     <div id="reader" aria-label="QR camera view"></div>
 
-    <!-- Controls + badge -->
+    <!-- Controls -->
     <div class="controls">
       <button id="scanBtn" type="button">Scan</button>
-      <div id="guestCount" class="circle" aria-live="polite" title="Total entering">0</div>
       <button id="confirmBtn" type="button" title="Confirm check-in" disabled>✔</button>
     </div>
 

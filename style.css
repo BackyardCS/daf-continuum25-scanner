@@ -14,19 +14,13 @@ body {
   background: linear-gradient(180deg, rgba(57,255,20,0.08), rgba(0,0,0,0));
 }
 
-/* Bigger, responsive logo:
-   - Scales between 220px and 380px width (crispy with srcset/SVG)
-   - Avoids upscaling beyond its natural width to prevent blur */
-  .logo {
+.logo {
   width: clamp(220px, 55vw, 380px);
   height: auto;
   object-fit: contain;
-  image-rendering: auto;
   filter: drop-shadow(0 2px 12px rgba(57,255,20,0.55));
 }
 
-
-/* Layout */
 #scanner-container {
   display: flex;
   flex-direction: column;
@@ -37,39 +31,35 @@ body {
   margin: 0 auto;
 }
 
-/* Camera frame: square and contained */
+/* Camera */
 #reader {
   width: 100%;
-  max-width: 420px;            /* keep in sync with JS qrbox */
-  aspect-ratio: 1 / 1;         /* square */
+  max-width: 420px;
+  aspect-ratio: 1 / 1;
   position: relative;
   overflow: hidden;
-  border: 1px solid #39FF14;   /* neon border */
+  border: 1px solid #39FF14;
   border-radius: 12px;
   background: #000;
   box-shadow: 0 4px 22px rgba(57,255,20,0.12);
 }
 
-/* Force the video to sit neatly inside the frame */
 #reader video,
 #reader__scan_region video {
   position: absolute !important;
   top: 50% !important;
   left: 50% !important;
-  transform: translate(-50%, -50%) rotate(0deg) !important; /* reset rotation */
+  transform: translate(-50%, -50%) rotate(0deg) !important;
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain !important;  /* keep full QR visible */
+  object-fit: contain !important;
 }
 
-/* Controls row */
+/* Controls */
 .controls {
-  position: relative;
-  z-index: 10;
   display: flex;
   gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
 }
 
 button {
@@ -81,32 +71,14 @@ button {
   font-size: 16px;
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-  transition: transform .08s ease, background .15s ease;
 }
 button:hover { background: #1f2937; }
-button:active { transform: translateY(1px); }
 button:disabled { opacity: 0.6; cursor: default; }
 
 #confirmBtn {
   background: #16a34a;
 }
 #confirmBtn:hover { background: #15803d; }
-
-/* Badge (shows total entering) */
-.circle {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: #0a0a0a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #39FF14;
-  font-size: 28px;
-  font-weight: 800;
-  border: 1px solid #39FF14;
-  box-shadow: inset 0 0 24px rgba(57,255,20,0.1);
-}
 
 /* Status */
 .status {
@@ -118,7 +90,7 @@ button:disabled { opacity: 0.6; cursor: default; }
 .ok  { color: #39FF14 !important; }
 .bad { color: #f43f5e !important; }
 
-/* Always-visible details */
+/* Info row */
 .info-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -137,7 +109,6 @@ button:disabled { opacity: 0.6; cursor: default; }
 .info-label {
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: .04em;
   color: #9ca3af;
 }
 
@@ -148,9 +119,7 @@ button:disabled { opacity: 0.6; cursor: default; }
   color: #e5e7eb;
 }
 
-/* Small screens */
 @media (max-width: 380px) {
-  .circle { width: 64px; height: 64px; font-size: 24px; }
   button { font-size: 15px; padding: 9px 14px; }
   .info-row { grid-template-columns: 1fr; }
 }
