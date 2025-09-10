@@ -12,22 +12,29 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
-  <div id="scanner-container">
+  <header class="topbar">
+    <!-- Logo (replace the src with your actual logo path if different) -->
+    <img src="images/logo.png" alt="Event Logo" class="logo" />
+  </header>
+
+  <main id="scanner-container">
     <!-- Camera box -->
     <div id="reader" aria-label="QR camera view"></div>
 
-    <!-- Controls under the camera -->
+    <!-- Controls + info -->
     <div class="controls">
       <button id="scanBtn" type="button">Scan</button>
       <div id="guestCount" class="circle" aria-live="polite">0</div>
-      <button id="confirmBtn" type="button" title="Confirm check-in">✔</button>
+      <button id="confirmBtn" type="button" title="Confirm check-in" disabled>✔</button>
     </div>
 
-    <!-- Status messages -->
+    <!-- Status + guest info (persisting until next scan) -->
     <div id="status" class="status" aria-live="polite">Ready</div>
-  </div>
+    <div id="attendee" class="attendee"></div>
+  </main>
 
   <!-- App logic -->
   <script src="script.js"></script>
 </body>
+<audio id="beep" src="data:audio/mp3;base64,//uQZAAAAAAAA..." preload="auto"></audio>
 </html>

@@ -1,3 +1,26 @@
+/* Page and header */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Arial, sans-serif;
+  background: #0b0b0b;
+  color: #e5e7eb;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px 4px;
+  background: linear-gradient(180deg, rgba(57,255,20,0.08), rgba(0,0,0,0));
+}
+
+.logo {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(57,255,20,0.35));
+}
+
 /* Layout */
 #scanner-container {
   display: flex;
@@ -5,21 +28,21 @@
   align-items: center;
   gap: 12px;
   padding: 16px;
-  font-family: system-ui, -apple-system, Arial, sans-serif;
-  background: #f6f7f9;
-  min-height: 100vh;
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 /* Camera frame: square and contained */
 #reader {
   width: 100%;
-  max-width: 400px;            /* match qrbox width */
+  max-width: 400px;            /* match qrbox width in JS */
   aspect-ratio: 1 / 1;         /* keep square */
   position: relative;
   overflow: hidden;            /* hide overflow */
-  border: 2px solid #e5e7eb;
+  border: 1px solid #39FF14;   /* neon border */
   border-radius: 12px;
   background: #000;            /* black backdrop */
+  box-shadow: 0 4px 22px rgba(57,255,20,0.12);
 }
 
 /* Force the video to sit neatly inside the frame */
@@ -28,10 +51,10 @@
   position: absolute !important;
   top: 50% !important;
   left: 50% !important;
-  transform: translate(-50%, -50%) rotate(0deg) !important; /* reset rotation */
+  transform: translate(-50%, -50%) rotate(0deg) !important; /* reset any rotation */
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain !important;  /* or 'cover' if you prefer a tighter crop */
+  object-fit: contain !important;  /* ensure the whole QR fits */
 }
 
 /* Controls row under the camera */
@@ -41,50 +64,66 @@
   display: flex;
   gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 button {
   padding: 10px 16px;
   border: 0;
   border-radius: 10px;
-  background: #111827;
+  background: #111827; /* dark gray */
   color: #fff;
   font-size: 16px;
   cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  transition: transform .08s ease, background .15s ease;
 }
+button:hover { background: #1f2937; }
+button:active { transform: translateY(1px); }
 button:disabled { opacity: 0.6; cursor: default; }
 
+#confirmBtn {
+  background: #16a34a;       /* green confirm */
+}
+#confirmBtn:hover { background: #15803d; }
+
+/* Guest counter */
 .circle {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: #f3f3f3;
+  background: #0a0a0a;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #111827;
+  color: #39FF14;
   font-size: 24px;
   font-weight: 800;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #39FF14;
+  box-shadow: inset 0 0 24px rgba(57,255,20,0.1);
 }
 
-/* Status line */
+/* Status line (persists) */
 .status {
   margin-top: 6px;
-  color: #6b7280;
   font-size: 14px;
   text-align: center;
+  color: #9ca3af;
+}
+.ok  { color: #39FF14 !important; }
+.bad { color: #f43f5e !important; }
+
+/* Attendee name */
+.attendee {
+  font-size: 18px;
+  font-weight: 700;
+  color: #39FF14;
+  text-align: center;
+  min-height: 24px; /* reserve space to reduce layout shift */
 }
 
-/* Optional nicer colors for success / error messages */
-.ok { color: #16a34a !important; }
-.bad { color: #dc2626 !important; }
-
-#confirmBtn {
-  background: #16a34a;   /* green */
-  color: white;
-}
-
-#confirmBtn:hover {
-  background: #15803d;   /* darker green on hover */
+/* Small screens */
+@media (max-width: 380px) {
+  .circle { width: 56px; height: 56px; font-size: 20px; }
+  button { font-size: 15px; padding: 9px 14px; }
 }

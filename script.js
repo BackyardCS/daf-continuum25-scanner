@@ -1,7 +1,7 @@
 /* ========================
    Configuration
 ======================== */
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbzAjsn0RB2V5QgSA4-VF7t09agOtmKgtQecLxudDy6cMEdlxdY7RSuOykEU03a8JLqJYA/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbx7gMCUujILd9SCPLF5Ax-ELrbRWkVbTmWWkX_6u3klcLBSwETAEZ9cPB6wV8PXELhoXw/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
 
 /* ========================
    State
@@ -9,6 +9,7 @@ const ENDPOINT = "https://script.google.com/macros/s/AKfycbzAjsn0RB2V5QgSA4-VF7t
 let qr = null;
 let isRunning = false;
 let lastCode = null;
+let lastAllowed = false;
 
 /* ========================
    Helpers
@@ -18,14 +19,22 @@ const setStatus = (msg, cls = "") => {
   const el = $("#status");
   el.className = `status ${cls}`.trim();
   el.textContent = msg;
+  // STATUS PERSISTS by design (we do not auto-clear it)
 };
 const setGuests = (n) => { $("#guestCount").textContent = String(n ?? 0); };
+const setAttendee = (name) => { $("#attendee").textContent = name ? `Guest: ${name}` : ""; };
+const enableConfirm = (on) => { $("#confirmBtn").disabled = !on; };
 
 /* ========================
    Scanner start/stop
 ======================== */
 async function startScanner() {
   if (isRunning) return;
+
+  enableConfirm(false);        // confirm only after a valid scan
+  setAttendee("");
+  setGuests(0);
+  setStatus("Starting camera…");
 
   const cfg = {
     fps: 10,
@@ -36,7 +45,7 @@ async function startScanner() {
   if (!qr) qr = new Html5Qrcode("reader");
 
   try {
-    // Force permission prompt under user gesture (iOS quirk)
+    // Permission nudge (especially for iOS Safari)
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
     tmp.getTracks().forEach(t => t.stop());
 
@@ -65,44 +74,54 @@ async function startScanner() {
 }
 
 async function stopScanner() {
-  if (!qr || !isRunning) return;
-  try {
-    await qr.stop();
-  } catch { /* ignore */ }
+  if (!qr || !isRunning) {
+    $("#scanBtn").textContent = "Scan";
+    return;
+  }
+  try { await qr.stop(); } catch {}
   isRunning = false;
   $("#scanBtn").textContent = "Scan";
-  setStatus("Stopped");
+  // We DO NOT clear status/attendee so the message persists
 }
 
 /* ========================
    Scan handlers
 ======================== */
 async function onScan(decodedText) {
-  // Example QR content: EVT-<response_id> or just <response_id>
-  lastCode = decodedText;
-  setStatus(`Scanned: ${decodedText}`);
-  // Validate against your Google Sheets API
+  // 1) Immediately capture and stop the camera (as requested)
+  lastCode = (decodedText || "").trim();
+  await stopScanner(); // close camera right away to “capture” the QR
+
+  setStatus(`Scanned: ${lastCode}`);
+  // 2) Validate against your Google Sheets API
   try {
-    const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(decodedText)}`, {
-      credentials: "omit",
-      cache: "no-store",
+    const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(lastCode)}`, {
+      credentials: "omit", cache: "no-store",
     });
     const data = await res.json(); // expected: { allowed: bool, name?: string, guests?: number, reason?: string }
-    if (data.allowed) {
+
+    lastAllowed = !!data.allowed;
+    if (lastAllowed) {
       setGuests(data.guests || 1);
+      setAttendee(data.name || "");
       setStatus(`✅ Allowed${data.name ? " — " + data.name : ""}`, "ok");
+      enableConfirm(true);   // allow confirm now
     } else {
       setGuests(0);
+      setAttendee("");
       setStatus(`⛔ Denied — ${data.reason || "Not found / already checked-in"}`, "bad");
+      enableConfirm(false);
     }
   } catch (e) {
     console.error(e);
     setStatus("Validation failed — check your Apps Script URL.", "bad");
+    enableConfirm(false);
   }
-
-  // Briefly pause to avoid double-reads
-  try { await qr.pause(true); } catch {}
-  setTimeout(() => { try { qr.resume(); } catch {} }, 900);
+try { document.getElementById('beep').play(); } catch {}
+if (navigator.vibrate) navigator.vibrate(50);
+  // NOTE: We intentionally do NOT auto-restart the camera.
+  // The UI now shows the persistent status and captured details
+  // until the user taps "Scan" again.
 }
 
 function onFail() {
@@ -112,38 +131,51 @@ function onFail() {
 /* ========================
    Confirm check-in
 ======================== */
+let confirming = false;
+
 async function confirmCheckIn() {
-  if (!lastCode) {
-    setStatus("Scan a QR first.", "bad");
-    return;
-  }
+  if (confirming) return;
+  if (!lastCode) { setStatus("Scan a QR first.", "bad"); return; }
+  if (!lastAllowed) { setStatus("This code is not allowed.", "bad"); return; }
+
+  confirming = true;
+  enableConfirm(false);
+
   try {
     const res = await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`, {
       credentials: "omit", cache: "no-store",
     });
-    const data = await res.json(); // { success?: bool, reason?: string, name?: string }
+    const data = await res.json(); // expected: { success: bool, name?: string, reason?: string }
+
     if (data.success) {
       setStatus(`Checked-in${data.name ? " — " + data.name : ""} ✅`, "ok");
+      // Keep the status and name on screen (persist) until next scan
+      lastCode = null;
+      lastAllowed = false;
       setGuests(0);
     } else {
       setStatus(`Check-in failed: ${data.reason || "Unknown error"}`, "bad");
+      // allow retry (camera is closed; user can press Scan again)
     }
   } catch (e) {
     console.error(e);
     setStatus("Check-in request error.", "bad");
+  } finally {
+    confirming = false;
   }
 }
 
 /* ========================
    Wire up UI
 ======================== */
-$("#scanBtn").addEventListener("click", () => {
-  if (isRunning) stopScanner(); else startScanner();
+$("#scanBtn").addEventListener("click", async () => {
+  if (isRunning) { await stopScanner(); setStatus("Stopped"); }
+  else { await startScanner(); }
 });
 
 $("#confirmBtn").addEventListener("click", confirmCheckIn);
 
-// Optional: stop camera when the page hides; resume on show
+// Stop camera when the page hides (safety)
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { stopScanner(); }
 });
