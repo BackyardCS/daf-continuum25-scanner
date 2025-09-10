@@ -1,7 +1,7 @@
 /* ========================
    Configuration
 ======================== */
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbzXfi5rsmFvOn-BVcSd6FpY3xLPUf8rQ__om2Occba5WFzxq2pknsM38OtTi96sg_tD5Q/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbzRzfeyTu1eAB4W7HRd8nugD3_IUSO8Mm7hTbiTmJPugneOCyg9qm4ubeu11qAwR04L6g/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
 
 /* ========================
    State
@@ -24,8 +24,9 @@ const setStatus = (msg, cls = "") => {
   el.textContent = msg;
   // STATUS PERSISTS until next action
 };
-const setGuests = (n) => { $("#guestCount").textContent = String(n ?? 0); };
-const setAttendee = (name) => { $("#attendee").textContent = name ? `Guest: ${name}` : ""; };
+const setGuestsBadge = (n) => { $("#guestCount").textContent = String(n ?? 0); };
+const setAttendee = (name) => { $("#attendee").textContent = name && name.trim() ? name : "—"; };
+const setCompanions = (n) => { $("#companions").textContent = Number.isFinite(n) ? String(n) : "0"; };
 const enableConfirm = (on) => { $("#confirmBtn").disabled = !on; };
 
 // Beep using Web Audio API (works without audio files)
@@ -54,21 +55,20 @@ function buzz(ms = 50) {
 async function startScanner() {
   if (isRunning) return;
 
-  enableConfirm(false);        // confirm only after a valid scan
-  setAttendee("");
-  setGuests(0);
+  // Do NOT clear name/companions here; they persist until next scan result
+  enableConfirm(false);
   setStatus("Starting camera…");
 
   const cfg = {
     fps: 10,
-    qrbox: { width: 400, height: 400 }, // match CSS frame
-    aspectRatio: 1.0                     // keep square preview behavior
+    qrbox: { width: 420, height: 420 }, // match CSS frame (max-width 420px)
+    aspectRatio: 1.0
   };
 
   if (!qr) qr = new Html5Qrcode("reader");
 
   try {
-    // Permission nudge (especially for iOS Safari)
+    // Permission nudge (esp. iOS Safari)
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
     tmp.getTracks().forEach(t => t.stop());
 
@@ -104,16 +104,16 @@ async function stopScanner() {
   try { await qr.stop(); } catch {}
   isRunning = false;
   $("#scanBtn").textContent = "Scan";
-  // We do NOT clear status/attendee so the message persists
+  // We do NOT clear status/name/companions so they persist
 }
 
 /* ========================
    Scan handlers
 ======================== */
 async function onScan(decodedText) {
-  // 1) Immediately capture and stop the camera (as requested)
+  // 1) Immediately capture and stop the camera
   lastCode = (decodedText || "").trim();
-  await stopScanner(); // close camera right away to “capture” the QR
+  await stopScanner(); // “capture” this QR
 
   // Feedback: beep + light vibration
   beep(120, 880, "sine");
@@ -125,17 +125,21 @@ async function onScan(decodedText) {
     const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(lastCode)}`, {
       credentials: "omit", cache: "no-store",
     });
-    const data = await res.json(); // expected: { allowed: bool, name?: string, guests?: number, reason?: string }
+    const data = await res.json(); // { allowed, name?, guests?, reason? }
+
+    // Always reflect name & companions in UI, regardless of status
+    const name = data.name || "";
+    const guests = Number.isFinite(data.guests) ? data.guests : (data.guests ? Number(data.guests) : 0);
+
+    setAttendee(name);
+    setCompanions(guests);
+    setGuestsBadge(guests);
 
     lastAllowed = !!data.allowed;
     if (lastAllowed) {
-      setGuests(data.guests || 1);
-      setAttendee(data.name || "");
-      setStatus(`✅ Allowed${data.name ? " — " + data.name : ""}`, "ok");
-      enableConfirm(true);   // allow confirm now
+      setStatus(`✅ Allowed${name ? " — " + name : ""}`, "ok");
+      enableConfirm(true);
     } else {
-      setGuests(0);
-      setAttendee("");
       setStatus(`⛔ Denied — ${data.reason || "Not found / already checked-in"}`, "bad");
       enableConfirm(false);
     }
@@ -145,9 +149,7 @@ async function onScan(decodedText) {
     enableConfirm(false);
   }
 
-  // NOTE: We intentionally do NOT auto-restart the camera.
-  // The UI now shows the persistent status and captured details
-  // until the user taps "Scan" again.
+  // We intentionally do NOT auto-restart the camera.
 }
 
 function onFail() {
@@ -171,7 +173,7 @@ async function confirmCheckIn() {
     const res = await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`, {
       credentials: "omit", cache: "no-store",
     });
-    const data = await res.json(); // expected: { success: bool, name?: string, reason?: string }
+    const data = await res.json(); // { success, name?, reason? }
 
     if (data.success) {
       // Feedback on successful confirm
@@ -179,10 +181,9 @@ async function confirmCheckIn() {
       buzz(70);
 
       setStatus(`Checked-in${data.name ? " — " + data.name : ""} ✅`, "ok");
-      // Keep the status and name on screen (persist) until next scan
+      // Keep name + companions + badge as-is until next scan
       lastCode = null;
       lastAllowed = false;
-      setGuests(0);
     } else {
       setStatus(`Check-in failed: ${data.reason || "Unknown error"}`, "bad");
       // allow retry (camera is closed; user can press Scan again)

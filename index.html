@@ -28,13 +28,20 @@
       <button id="confirmBtn" type="button" title="Confirm check-in" disabled>✔</button>
     </div>
 
-    <!-- Status + guest info (persisting until next scan) -->
+    <!-- Status (persists), then guest info (always visible) -->
     <div id="status" class="status" aria-live="polite">Ready</div>
-    <div id="attendee" class="attendee"></div>
-  </main>
 
-  <!-- Web Audio context is created in JS; this <audio> is optional fallback if you want a file later -->
-  <!-- <audio id="beep" src="beep.mp3" preload="auto"></audio> -->
+    <div class="info-row">
+      <div class="info-block">
+        <div class="info-label">Guest</div>
+        <div id="attendee" class="info-value">—</div>
+      </div>
+      <div class="info-block">
+        <div class="info-label">Guests with them</div>
+        <div id="companions" class="info-value">0</div>
+      </div>
+    </div>
+  </main>
 
   <!-- App logic -->
   <script src="script.js"></script>
