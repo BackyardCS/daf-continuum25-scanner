@@ -13,7 +13,7 @@
 </head>
 <body>
   <header class="topbar">
-    <!-- Logo (replace the src with your actual logo path if different) -->
+    <!-- Responsive logo (swap src to your logo path if different) -->
     <img src="images/logo.png" alt="Event Logo" class="logo" />
   </header>
 
@@ -33,8 +33,10 @@
     <div id="attendee" class="attendee"></div>
   </main>
 
+  <!-- Web Audio context is created in JS; this <audio> is optional fallback if you want a file later -->
+  <!-- <audio id="beep" src="beep.mp3" preload="auto"></audio> -->
+
   <!-- App logic -->
   <script src="script.js"></script>
 </body>
-<audio id="beep" src="data:audio/mp3;base64,//uQZAAAAAAAA..." preload="auto"></audio>
 </html>

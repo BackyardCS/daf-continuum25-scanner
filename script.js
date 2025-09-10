@@ -1,7 +1,7 @@
 /* ========================
    Configuration
 ======================== */
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbx7gMCUujILd9SCPLF5Ax-ELrbRWkVbTmWWkX_6u3klcLBSwETAEZ9cPB6wV8PXELhoXw/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbzXfi5rsmFvOn-BVcSd6FpY3xLPUf8rQ__om2Occba5WFzxq2pknsM38OtTi96sg_tD5Q/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
 
 /* ========================
    State
@@ -11,6 +11,9 @@ let isRunning = false;
 let lastCode = null;
 let lastAllowed = false;
 
+// Web Audio (beep) setup
+let audioCtx = null;
+
 /* ========================
    Helpers
 ======================== */
@@ -19,11 +22,31 @@ const setStatus = (msg, cls = "") => {
   const el = $("#status");
   el.className = `status ${cls}`.trim();
   el.textContent = msg;
-  // STATUS PERSISTS by design (we do not auto-clear it)
+  // STATUS PERSISTS until next action
 };
 const setGuests = (n) => { $("#guestCount").textContent = String(n ?? 0); };
 const setAttendee = (name) => { $("#attendee").textContent = name ? `Guest: ${name}` : ""; };
 const enableConfirm = (on) => { $("#confirmBtn").disabled = !on; };
+
+// Beep using Web Audio API (works without audio files)
+function beep(duration = 120, freq = 880, type = "sine") {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = 0.07; // gentle volume
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    setTimeout(() => { osc.stop(); }, duration);
+  } catch (_) { /* ignore */ }
+}
+
+// Light haptic feedback (where supported)
+function buzz(ms = 50) {
+  if (navigator.vibrate) try { navigator.vibrate(ms); } catch(_) {}
+}
 
 /* ========================
    Scanner start/stop
@@ -81,7 +104,7 @@ async function stopScanner() {
   try { await qr.stop(); } catch {}
   isRunning = false;
   $("#scanBtn").textContent = "Scan";
-  // We DO NOT clear status/attendee so the message persists
+  // We do NOT clear status/attendee so the message persists
 }
 
 /* ========================
@@ -91,6 +114,10 @@ async function onScan(decodedText) {
   // 1) Immediately capture and stop the camera (as requested)
   lastCode = (decodedText || "").trim();
   await stopScanner(); // close camera right away to “capture” the QR
+
+  // Feedback: beep + light vibration
+  beep(120, 880, "sine");
+  buzz(50);
 
   setStatus(`Scanned: ${lastCode}`);
   // 2) Validate against your Google Sheets API
@@ -117,8 +144,7 @@ async function onScan(decodedText) {
     setStatus("Validation failed — check your Apps Script URL.", "bad");
     enableConfirm(false);
   }
-try { document.getElementById('beep').play(); } catch {}
-if (navigator.vibrate) navigator.vibrate(50);
+
   // NOTE: We intentionally do NOT auto-restart the camera.
   // The UI now shows the persistent status and captured details
   // until the user taps "Scan" again.
@@ -148,6 +174,10 @@ async function confirmCheckIn() {
     const data = await res.json(); // expected: { success: bool, name?: string, reason?: string }
 
     if (data.success) {
+      // Feedback on successful confirm
+      beep(120, 660, "square");
+      buzz(70);
+
       setStatus(`Checked-in${data.name ? " — " + data.name : ""} ✅`, "ok");
       // Keep the status and name on screen (persist) until next scan
       lastCode = null;
