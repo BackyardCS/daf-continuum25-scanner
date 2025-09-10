@@ -17,13 +17,14 @@ body {
 /* Bigger, responsive logo:
    - Scales between 220px and 380px width (crispy with srcset/SVG)
    - Avoids upscaling beyond its natural width to prevent blur */
-.logo {
+  .logo {
   width: clamp(220px, 55vw, 380px);
   height: auto;
   object-fit: contain;
-  image-rendering: auto; /* default, best for non-pixel images */
-  filter: drop-shadow(0 2px 8px rgba(57,255,20,0.35));
+  image-rendering: auto;
+  filter: drop-shadow(0 2px 12px rgba(57,255,20,0.55));
 }
+
 
 /* Layout */
 #scanner-container {
