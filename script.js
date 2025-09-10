@@ -1,7 +1,12 @@
 /* ========================
    Configuration
 ======================== */
-const ENDPOINT = "https://script.google.com/macros/s/AKfycbzRzfeyTu1eAB4W7HRd8nugD3_IUSO8Mm7hTbiTmJPugneOCyg9qm4ubeu11qAwR04L6g/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbzXfi5rsmFvOn-BVcSd6FpY3xLPUf8rQ__om2Occba5WFzxq2pknsM38OtTi96sg_tD5Q/exec"; // e.g., https://script.google.com/macros/s/XXX/exec
+
+// IMPORTANT: Set this to match your Sheet's meaning of "guests":
+// true  => Sheet's "guests" = companions only (NOT including the main guest)
+// false => Sheet's "guests" = total people (main guest included)
+const GUESTS_FIELD_IS_ADDITIONAL = true;
 
 /* ========================
    State
@@ -11,25 +16,26 @@ let isRunning = false;
 let lastCode = null;
 let lastAllowed = false;
 
-// Web Audio (beep) setup
+// Web Audio (beep)
 let audioCtx = null;
 
 /* ========================
    Helpers
 ======================== */
 const $ = (sel) => document.querySelector(sel);
+
 const setStatus = (msg, cls = "") => {
   const el = $("#status");
   el.className = `status ${cls}`.trim();
   el.textContent = msg;
-  // STATUS PERSISTS until next action
+  // persists
 };
-const setGuestsBadge = (n) => { $("#guestCount").textContent = String(n ?? 0); };
-const setAttendee = (name) => { $("#attendee").textContent = name && name.trim() ? name : "—"; };
+
+const setBadgeTotal = (n) => { $("#guestCount").textContent = String(n ?? 0); };
+const setAttendee = (name) => { $("#attendee").textContent = name && String(name).trim() ? String(name).trim() : "—"; };
 const setCompanions = (n) => { $("#companions").textContent = Number.isFinite(n) ? String(n) : "0"; };
 const enableConfirm = (on) => { $("#confirmBtn").disabled = !on; };
 
-// Beep using Web Audio API (works without audio files)
 function beep(duration = 120, freq = 880, type = "sine") {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -37,16 +43,45 @@ function beep(duration = 120, freq = 880, type = "sine") {
     const gain = audioCtx.createGain();
     osc.type = type;
     osc.frequency.value = freq;
-    gain.gain.value = 0.07; // gentle volume
+    gain.gain.value = 0.07;
     osc.connect(gain).connect(audioCtx.destination);
     osc.start();
     setTimeout(() => { osc.stop(); }, duration);
-  } catch (_) { /* ignore */ }
+  } catch (_) {}
 }
 
-// Light haptic feedback (where supported)
 function buzz(ms = 50) {
   if (navigator.vibrate) try { navigator.vibrate(ms); } catch(_) {}
+}
+
+// Extract name from flexible API fields
+function extractName(data) {
+  const keys = ['name','full_name','fullname','Name','Full Name'];
+  for (const k of keys) {
+    const v = data?.[k];
+    if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
+  }
+  return "";
+}
+
+// Extract raw guests value from flexible API fields
+function extractGuestsRaw(data) {
+  const keys = ['guests','guest_count','companions','num_guests','attendees','total_guests','Total Guests'];
+  for (const k of keys) {
+    const v = data?.[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      const n = Number(v);
+      if (!isNaN(n)) return n;
+    }
+  }
+  return 0;
+}
+
+// Convert raw guests to companions + total entering
+function normalizeGuests(raw) {
+  const companions = GUESTS_FIELD_IS_ADDITIONAL ? raw : Math.max(Number(raw) - 1, 0);
+  const total = GUESTS_FIELD_IS_ADDITIONAL ? Number(raw) + 1 : Number(raw);
+  return { companions, total };
 }
 
 /* ========================
@@ -55,13 +90,12 @@ function buzz(ms = 50) {
 async function startScanner() {
   if (isRunning) return;
 
-  // Do NOT clear name/companions here; they persist until next scan result
   enableConfirm(false);
   setStatus("Starting camera…");
 
   const cfg = {
     fps: 10,
-    qrbox: { width: 420, height: 420 }, // match CSS frame (max-width 420px)
+    qrbox: { width: 420, height: 420 }, // match CSS frame
     aspectRatio: 1.0
   };
 
@@ -72,14 +106,14 @@ async function startScanner() {
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
     tmp.getTracks().forEach(t => t.stop());
 
-    // Prefer back camera first
+    // Prefer rear camera
     await qr.start({ facingMode: { exact: "environment" } }, cfg, onScan, onFail);
     isRunning = true;
     $("#scanBtn").textContent = "Stop";
     setStatus("Scanning…");
     return;
   } catch (_) {
-    // fall back to device enumeration
+    // fallback
   }
 
   try {
@@ -104,36 +138,37 @@ async function stopScanner() {
   try { await qr.stop(); } catch {}
   isRunning = false;
   $("#scanBtn").textContent = "Scan";
-  // We do NOT clear status/name/companions so they persist
 }
 
 /* ========================
    Scan handlers
 ======================== */
 async function onScan(decodedText) {
-  // 1) Immediately capture and stop the camera
+  // Capture & stop the camera immediately
   lastCode = (decodedText || "").trim();
-  await stopScanner(); // “capture” this QR
+  await stopScanner();
 
-  // Feedback: beep + light vibration
+  // Feedback: beep + vibration
   beep(120, 880, "sine");
   buzz(50);
 
   setStatus(`Scanned: ${lastCode}`);
-  // 2) Validate against your Google Sheets API
+
+  // Validate against your API
   try {
     const res = await fetch(`${ENDPOINT}?code=${encodeURIComponent(lastCode)}`, {
       credentials: "omit", cache: "no-store",
     });
-    const data = await res.json(); // { allowed, name?, guests?, reason? }
+    const data = await res.json();
 
-    // Always reflect name & companions in UI, regardless of status
-    const name = data.name || "";
-    const guests = Number.isFinite(data.guests) ? data.guests : (data.guests ? Number(data.guests) : 0);
+    // Always show name + guests regardless of status
+    const name = extractName(data);
+    const rawGuests = extractGuestsRaw(data);
+    const { companions, total } = normalizeGuests(rawGuests);
 
     setAttendee(name);
-    setCompanions(guests);
-    setGuestsBadge(guests);
+    setCompanions(companions);
+    setBadgeTotal(total);
 
     lastAllowed = !!data.allowed;
     if (lastAllowed) {
@@ -148,12 +183,10 @@ async function onScan(decodedText) {
     setStatus("Validation failed — check your Apps Script URL.", "bad");
     enableConfirm(false);
   }
-
-  // We intentionally do NOT auto-restart the camera.
 }
 
 function onFail() {
-  // Ignore frame decode failures to keep it responsive
+  // ignore frame decode failures
 }
 
 /* ========================
@@ -173,20 +206,27 @@ async function confirmCheckIn() {
     const res = await fetch(`${ENDPOINT}?checkin=true&code=${encodeURIComponent(lastCode)}`, {
       credentials: "omit", cache: "no-store",
     });
-    const data = await res.json(); // { success, name?, reason? }
+    const data = await res.json();
 
     if (data.success) {
-      // Feedback on successful confirm
+      // Feedback
       beep(120, 660, "square");
       buzz(70);
 
-      setStatus(`Checked-in${data.name ? " — " + data.name : ""} ✅`, "ok");
-      // Keep name + companions + badge as-is until next scan
+      // Optionally refresh name/guests if API echoes them
+      const name = extractName(data) || $("#attendee").textContent;
+      const rawGuests = extractGuestsRaw(data);
+      if (!isNaN(rawGuests) && rawGuests !== 0) {
+        const { companions, total } = normalizeGuests(rawGuests);
+        setCompanions(companions);
+        setBadgeTotal(total);
+      }
+
+      setStatus(`Checked-in${name ? " — " + name : ""} ✅`, "ok");
       lastCode = null;
       lastAllowed = false;
     } else {
       setStatus(`Check-in failed: ${data.reason || "Unknown error"}`, "bad");
-      // allow retry (camera is closed; user can press Scan again)
     }
   } catch (e) {
     console.error(e);

@@ -13,24 +13,35 @@
 </head>
 <body>
   <header class="topbar">
-    <!-- Responsive logo (swap src to your logo path if different) -->
-    <img src="images/logo.png" alt="Event Logo" class="logo" />
+    <!-- Responsive, crisp logo:
+         - If you have SVG, it will be used.
+         - Otherwise, PNG srcset provides retina variants (2x/3x). -->
+    <picture>
+      <source srcset="images/logo.svg" type="image/svg+xml" />
+      <img
+        class="logo"
+        src="images/logo@1x.png"
+        srcset="images/logo@2x.png 2x, images/logo@3x.png 3x"
+        sizes="(min-width: 680px) 380px, 55vw"
+        alt="Event Logo" />
+    </picture>
   </header>
 
   <main id="scanner-container">
     <!-- Camera box -->
     <div id="reader" aria-label="QR camera view"></div>
 
-    <!-- Controls + info -->
+    <!-- Controls + badge -->
     <div class="controls">
       <button id="scanBtn" type="button">Scan</button>
-      <div id="guestCount" class="circle" aria-live="polite">0</div>
+      <div id="guestCount" class="circle" aria-live="polite" title="Total entering">0</div>
       <button id="confirmBtn" type="button" title="Confirm check-in" disabled>✔</button>
     </div>
 
-    <!-- Status (persists), then guest info (always visible) -->
+    <!-- Status (persists) -->
     <div id="status" class="status" aria-live="polite">Ready</div>
 
+    <!-- Always-visible details -->
     <div class="info-row">
       <div class="info-block">
         <div class="info-label">Guest</div>
