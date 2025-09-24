@@ -4,7 +4,7 @@
 const ENDPOINT = "https://script.google.com/macros/s/AKfycbzzVZJ_jJMlObyoInZBG0w6GqhQOarc0zcm82Si7AenuNc8zEBgnT9xQ3daTyPrYOQyiw/exec";
 
 // guests field config
-const GUESTS_FIELD_IS_ADDITIONAL = true;
+const GUESTS_FIELD_IS_ADDITIONAL = false;
 
 /* ========================
    State
