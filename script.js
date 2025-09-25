@@ -123,7 +123,7 @@ async function confirmCheckIn(){
     if(data.success){ beep(120,660,"square"); buzz(70);
       setStatus(`Checked-in${extractName(data)?" — "+extractName(data):""} ✅`,"ok");
       lastCode=null; lastAllowed=false;
-    } else { setStatus(`Check-in failed: ${data.reason||"Unknown"}`,"bad"); }
+    } else { setStatus(`${data.reason||"Unknown"}`,"bad"); }
   }catch{ setStatus("Check-in request error.","bad"); }
   finally{ confirming=false; }
 }
